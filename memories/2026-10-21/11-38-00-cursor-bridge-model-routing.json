@@ -1,8 +1,8 @@
 {
   "session_id": "2026-10-21-11-38-00-cursor-bridge-model-routing",
   "timestamp": "2026-10-21T03:38:00Z",
-  "last_updated": "2026-10-21T06:02:00Z",
-  "extraction_count": 3,
+  "last_updated": "2026-10-21T06:06:22.539Z",
+  "extraction_count": 4,
   "memories": [
     {
       "type": "insight",
@@ -106,8 +106,8 @@
       "type": "insight",
       "category": "技术",
       "title": "本机 0.2.2 合成提交已走 Magpie 选中模型，不再出现 522",
-      "content": "2026-10-21 14:00 激活 0.2.8-NxbiVJ 后，status 为 connected，引擎 --version 为 0.2.2，healthz 204，代理 127.0.0.1:52407。node test/manual-commit.mjs --live 用合成 diff 经本地代理 POST WriteGitCommitMessage，约 6.6 秒返回 protobuf「chore: 将测试文本的 old value 替换为 new value」。bridge.db 新增 commit-message-e8867ba0-58a1-47cc-8ff8-b0cbf4defbf1：model_id=jiji-codex/gpt-6.1-sol，provider_url=http://127.0.0.1:3425/v1/responses，http_status=200，status=completed。model_configs sort_order=0 即该选中模型。未重启 Cursor，未改系统信任。Cursor 界面 Generate Commit Message 仍需用户点一次确认。Windows 引擎未包含此修复。",
-      "source_chunk": "**Assistant:** 合成请求已经拿到 protobuf 提交说明。\ncommit_message: chore: 将测试文本的 old value 替换为 new value\nmodel_id = jiji-codex/gpt-6.1-sol\nprovider_url = http://127.0.0.1:3425/v1/responses\nhttp_status = 200",
+      "content": "2026-10-21 14:00 激活 0.2.8-NxbiVJ 后，status 为 connected，引擎 --version 为 0.2.2，healthz 204，代理 127.0.0.1:52407。node test/manual-commit.mjs --live 用合成 diff 经本地代理 POST WriteGitCommitMessage，约 6.6 秒返回 protobuf「chore: 将测试文本的 old value 替换为 new value」。bridge.db 新增 commit-message-e8867ba0-58a1-47cc-8ff8-b0cbf4defbf1：model_id=jiji-codex/gpt-6.1-sol，provider_url=http://127.0.0.1:3425/v1/responses，http_status=200，status=completed。model_configs sort_order=0 即该选中模型。未重启 Cursor，未改系统信任。用户随后反馈「确认正确」，界面验证已获用户确认。Windows 引擎未包含此修复。",
+      "source_chunk": "**Assistant:** 合成请求已经拿到 protobuf 提交说明。\ncommit_message: chore: 将测试文本的 old value 替换为 new value\nmodel_id = jiji-codex/gpt-6.1-sol\nprovider_url = http://127.0.0.1:3425/v1/responses\nhttp_status = 200\n**User:** 确认正确，下面清理下冗余的过程文件，另外 cursor-byok-2068ab20513288e6a0289d33febe872a30608610 \n中的 target 中的 debug和release中的大量依赖是否还有用",
       "confidence_score": 100,
       "related_entities": [
         {"type": "project", "raw": "magpie-agent-cursor-bridge", "slug": "magpie-agent-cursor-bridge", "resolved": false},
@@ -138,6 +138,22 @@
         {"type": "reminder", "raw": "Windows 0.2.1 unfixed", "slug": "windows-unfixed", "resolved": false}
       ],
       "target_agents": ["future-cursor-bridge-agents"]
+    },
+    {
+      "type": "workflow_note",
+      "category": "工作流",
+      "title": "源码 target 已清理，运行发布副本不依赖 Rust 编译缓存",
+      "content": "用户确认提交生成修复正确后要求清理过程文件。对 ~/be/cursor-byok-2068ab20513288e6a0289d33febe872a30608610 显式指定 --target-dir 执行 cargo clean，删除 10299 个文件、3.4 GiB，包括 debug 和 release。原先 debug 约 2.1 GiB、release 约 1.3 GiB。这些是编译和测试产物，后续重编译会重新生成，但运行只需要已复制到插件 bin 和不可变 release 中的引擎。清理后进程仍是 56687，状态 connected、引擎 0.2.2、健康检查 204，插件与发布副本的完整性校验通过。",
+      "source_chunk": "**Assistant:** 这些依赖只用于 Rust 编译、测试和加速重编译，**运行桥接不需要它们**。\n**Tool:** Removed 10299 files, 3.4GiB total\n**Tool:** {\"state\":\"connected\",\"pid\":56687,\"engine\":\"0.2.2\",\"health\":204,\"packageAndReleaseIntegrity\":\"passed\",\"targetExists\":false,\"temporaryScriptExists\":false}",
+      "confidence_score": 100
+    },
+    {
+      "type": "learning",
+      "category": "工作流",
+      "title": "构建脚本使用临时 target，不复用源码目录缓存；临时激活脚本已删除",
+      "content": "scripts/build-native.sh 设置 CARGO_TARGET_DIR=$bridge_build/target，并通过退出 trap 清理临时构建目录，所以源码树的旧 target 不会被这个脚本复用。后续编译可重新生成依赖，代价是完整编译耗时。已删除 /tmp/cursor-bridge-activate-20261021.mjs；需要再次激活时应使用 lib/install.js 的 stage/activate 或正式安装入口，不能再依赖该临时文件。源码、source.patch、test/manual-commit.mjs 回归验证脚本以及旧发布与数据库备份均保留。",
+      "source_chunk": "**Tool:** export CARGO_TARGET_DIR=\"$bridge_build/target\"\n**Tool:** trap 'rm -rf -- \"$bridge_build\"' EXIT\n**Tool:** delete success path=/tmp/cursor-bridge-activate-20261021.mjs\n**Assistant:** 源码、补丁、回归测试、当前引擎和回滚备份都保留。",
+      "confidence_score": 100
     }
   ],
   "suggestions": []
