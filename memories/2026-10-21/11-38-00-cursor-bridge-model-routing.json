@@ -1,0 +1,144 @@
+{
+  "session_id": "2026-10-21-11-38-00-cursor-bridge-model-routing",
+  "timestamp": "2026-10-21T03:38:00Z",
+  "last_updated": "2026-10-21T06:02:00Z",
+  "extraction_count": 3,
+  "memories": [
+    {
+      "type": "insight",
+      "category": "技术",
+      "title": "模型替换分为本地目录覆盖和模型哈希查表路由，选中模型不是全局强制覆盖",
+      "content": "插件通过 Cursor 代理配置和本地受信任证书接管指定协议接口。原生补丁注入 LocalCatalogOnly，AvailableModels 和 GetUsableModels 直接返回本地目录，并通过协议显示配置隐藏 Auto。目录向 Cursor 暴露 model_hash，推理时 ProviderRouter 根据该标识查数据库，并把请求 model_id 换回 Magpie 的实际模型或路由组 ID。connection.json 中的 model 只被排序到首位并用于默认模型，Cursor 仍可选择目录内其他模型。锁定上游的 BidiAppend 处理器对未命中本地目录的模型保留官方上游分支，因此目录本地化不等于禁止所有官方推理。",
+      "source_chunk": "**Assistant:** 从代码看，它通过本机代理接管 Cursor 的模型目录和聊天请求：模型列表改为 Magpie 目录，推理请求再转到 Magpie 网关。\nsource.patch: models.sort_by_key(|m| m.id != c.model);\nProviderRouter: routed.request.model.model_id = model.model_id.clone();",
+      "confidence_score": 99,
+      "related_entities": [
+        {"type": "project", "raw": "magpie-agent-cursor-bridge", "slug": "magpie-agent-cursor-bridge", "resolved": false},
+        {"type": "file", "raw": "source.patch", "slug": "source-patch", "resolved": false}
+      ],
+      "urls_mentioned": ["https://github.com/leookun/cursor-byok/blob/2068ab20513288e6a0289d33febe872a30608610/server/src/api/cursor/handlers.rs", "https://github.com/leookun/cursor-byok/blob/2068ab20513288e6a0289d33febe872a30608610/server/src/provider/router.rs"]
+    },
+    {
+      "type": "learning",
+      "category": "技术",
+      "title": "桥接原生配置默认使用 OpenAI Responses，而非 Chat Completions",
+      "content": "source.patch 为所有 Magpie 模型生成 type=openai 的模型配置，但没有设置 openai_endpoint。scripts/build-native.sh 锁定的 cursor-byok 提交为 2068ab20513288e6a0289d33febe872a30608610，该提交的 normalize_openai_endpoint 将空端点解析为 /v1/responses，ProviderRouter 据此使用 OpenAiResponsesProvider。排查网关兼容性时，应先核对 Responses 路径，不应仅凭 OpenAI 兼容这一描述假设走 /v1/chat/completions。本次为源码推导，未抓包验证每个运行请求。",
+      "source_chunk": "\"group_name\":\"Magpie\", \"type\":\"openai\", \"base_url\": c.gateway.trim_end_matches('/')\nfn normalize_openai_endpoint(value: &str) -> Result<String> {\n    match value.trim() {\n        \"\" | OPENAI_RESPONSES_ENDPOINT => Ok(OPENAI_RESPONSES_ENDPOINT.into()),",
+      "confidence_score": 99,
+      "related_entities": [{"type": "file", "raw": "scripts/build-native.sh", "slug": "scripts-build-native-sh", "resolved": false}],
+      "urls_mentioned": ["https://github.com/leookun/cursor-byok/blob/2068ab20513288e6a0289d33febe872a30608610/server/src/model/configuration.rs"]
+    },
+    {
+      "type": "insight",
+      "category": "技术",
+      "title": "0.2.7 的真实刷新间隔和固定代理端口应以源码为准",
+      "content": "README 写模型每 15 秒同步，但当前 bridge.js 实际约每 4 秒调用 gatewayModels 刷新有效目录，监督循环正常等待为 600 毫秒，原生引擎每 2 秒检查 effective.json 的内容变化。Cursor 对外使用固定 TCP 转发端口 52407，转发到原生代理的动态端口，以减少引擎重启后客户端缓存旧代理地址的问题。0.2.7 的 reloadCursor 默认直接返回，只有 CURSOR_BRIDGE_RESTART_CURSOR=1 才会结束 Cursor；不能把 ensureCursorReadsNewProxy 的函数名当作确实发送了客户端刷新通知。",
+      "source_chunk": "nextRefresh=Date.now()+4000;\nif(!ending) await wait(600);\nconst relayPort=Number(process.env.CURSOR_BRIDGE_RELAY_PORT)||52407;\nif (process.env.CURSOR_BRIDGE_RESTART_CURSOR !== '1') return;",
+      "confidence_score": 100,
+      "related_entities": [{"type": "file", "raw": "bridge.js", "slug": "bridge-js", "resolved": false}, {"type": "file", "raw": "lib/relay.js", "slug": "lib-relay-js", "resolved": false}]
+    },
+    {
+      "type": "workflow_note",
+      "category": "工作流",
+      "title": "分析时区分插件源码、实际运行发布副本与原生引擎版本",
+      "content": "插件源码位于 Magpie 插件目录，实际监督进程从 installation.json 记录的不可变 release 目录运行。integrity.json 单独锁定 engine_version（Windows 共用）和 engine_version_darwin_arm64（macOS 可独立前进），二者不同属于设计。原生完整源码没有放在插件中，需要结合 source.patch 与构建脚本锁定的上游提交核对。",
+      "source_chunk": "integrity.json: \"version\": \"0.2.8\", \"engine_version\": \"0.2.1\", \"engine_version_darwin_arm64\": \"0.2.2\"\ninstallation.json: \"release\": \"/Users/wangxingwen/.local/share/magpie-cursor-bridge/releases/0.2.8-NxbiVJ\"",
+      "confidence_score": 100,
+      "related_entities": [{"type": "file", "raw": "integrity.json", "slug": "integrity-json", "resolved": false}, {"type": "project", "raw": "magpie-agent-cursor-bridge", "slug": "magpie-agent-cursor-bridge", "resolved": false}]
+    },
+    {
+      "type": "insight",
+      "category": "技术",
+      "title": "提交信息生成失败已实证为默认转发第三方服务后返回 HTTP 522",
+      "content": "2026-10-21 排查 Cursor Generate Commit Message：客户端 11:36:34 和 13:23:29 的 WriteGitCommitMessage 均报 HTTP 522。对运行引擎实际使用的 bridge.db 只读查询，commit_settings 和 cursor_tab 均无记录，本地模型有 41 个、模型调用 24 条，其中 commit-message-* 为 0。对本机后端 /aiserver.v1.AiService/WriteGitCommitMessage 发送空 protobuf 请求，约 26 秒返回 Cloudflare 522 HTML，页面明确标识 tab.leokun.cn 源站连接超时。因此提交生成请求没有走 Magpie 本地模型，实际失败在默认第三方转发路径。本次复现没有发送仓库 diff 或认证头。",
+      "source_chunk": "**Assistant:** 已复现：提交信息生成请求被转发到了第三方服务 `tab.leokun.cn`，该服务返回 Cloudflare HTTP 522。桥接没有为这个功能配置本地模型，因此它没有走 Magpie 的聊天模型路径；我使用的是空请求，没有额外发送仓库内容。\nHTTP_STATUS=522 TOTAL_SECONDS=25.985768",
+      "confidence_score": 100,
+      "related_entities": [{"type": "project", "raw": "magpie-agent-cursor-bridge", "slug": "magpie-agent-cursor-bridge", "resolved": false}, {"type": "business", "raw": "WriteGitCommitMessage", "slug": "write-git-commit-message", "resolved": false}],
+      "urls_mentioned": ["https://tab.leokun.cn"]
+    },
+    {
+      "type": "learning",
+      "category": "技术",
+      "title": "内存 TabMode::Direct 不等于数据库 TabSettings::Direct，提交功能读后者",
+      "content": "锁定上游的 write_git_commit_message 先读取独立 CommitSettings；缺省 model_id 为空时进入 forward_direct。该函数读取数据库 tab_settings，缺省 TabSettings 的 mode 是 Public，service_url 返回 https://tab.leokun.cn。source.patch 中 start_proxy_only 只把 harness 内存中的 tab_mode 设为 Direct，以决定 Tab 路径是否被拦截，没有写入数据库；因此不能据此认定提交生成也直连 Cursor 官方。README 所述没有外部中转不适用于当前提交生成默认分支，按源码该分支会转发含 diff 的原始 RPC，转发器也未过滤 Authorization。",
+      "source_chunk": "let settings = registry.store().commit_settings().await?;\nif settings.is_direct() { return forward_direct(&registry, upstream, request).await; }\nlet settings = registry.store().tab_settings().await?;\nSome(service_url) => proxy::forward_to_service(&upstream, request, service_url).await,\n* self.inner.tab_mode.write() = TabMode::Direct;",
+      "confidence_score": 100,
+      "urls_mentioned": ["https://github.com/leookun/cursor-byok/blob/2068ab20513288e6a0289d33febe872a30608610/server/src/cursor/services/commit_message.rs", "https://github.com/leookun/cursor-byok/blob/2068ab20513288e6a0289d33febe872a30608610/server/src/store/settings.rs"]
+    },
+    {
+      "type": "decision",
+      "category": "技术",
+      "title": "提交生成在 LocalCatalogOnly 下按请求解析目录首位模型，不写入 commit_settings",
+      "content": "已批准并落地的修复不是把 Magpie 选中模型哈希持久化进 commit_settings，而是：专用桥接注入 LocalCatalogOnly 后，每次 WriteGitCommitMessage 从当前 models().first() 取 model_hash，再走 generate_local。catalogue() 用 sort_by_key(|m| m.id != c.model) 把 Magpie 选中模型排到首位，因此 first() 就是 Magpie 当前选择，而不是聊天窗口临时模型。目录刷新会更新哈希，失败只返回本地错误，禁止 forward_direct。普通 BYOK 无 LocalCatalogOnly 时仍走原转发。",
+      "source_chunk": "**User:** 提交信息生成必须使用 Magpie 选中的智能体模型，不能回退 Cursor 官方或 tab.leokun.cn。\nif local_only.is_some() { settings.model_id = registry.store().models().await?.first()...; return generate_local(...); }\nmodels.sort_by_key(|m| m.id != c.model);",
+      "reasoning": "哈希会随显示名、网关和密钥变化；持久化一次会在刷新后失效，且可能把错误模型写进数据库。",
+      "alternatives": [
+        {"option": "首次导入后写入 commit_settings.model_id 并持久化 cursor_tab=Direct", "why_not": "哈希会变，且只改数据库不能覆盖空目录或请求中途刷新；用户要求禁止任何外部回退。"}
+      ],
+      "selected_option": "每请求从当前本地目录首位解析 Magpie 选中模型并 generate_local",
+      "confidence_score": 100,
+      "related_entities": [
+        {"type": "file", "raw": "server/src/cursor/services/commit_message.rs", "slug": "commit-message-rs", "resolved": false},
+        {"type": "file", "raw": "server/src/bin/cursor-magpie-bridge.rs", "slug": "cursor-magpie-bridge-rs", "resolved": false}
+      ]
+    },
+    {
+      "type": "learning",
+      "category": "技术",
+      "title": "macOS 引擎可独立升到 0.2.2，Windows 二进制仍停在 0.2.1",
+      "content": "插件版本 0.2.8 用于触发 Magpie connect 重新暂存。integrity.json 的 engine_version 仍是 0.2.1 且 engine_win32_x64 摘要未改，避免误报 Windows 已修好。macOS Apple Silicon 用 engine_version_darwin_arm64=0.2.2 和 engine SHA 校验新二进制。verifyPackage 在 darwin/arm64 上优先读平台引擎版本。本次交付范围明确为 local-macos：已在本机激活并验证，不声称 Windows 修复，不发布、不推送。",
+      "source_chunk": "integrity.json: engine_version 0.2.1, engine_version_darwin_arm64 0.2.2, engine_win32_x64 unchanged\nverifyPackage: platform === 'darwin' && arch === 'arm64' ? checksums.engine_version_darwin_arm64",
+      "confidence_score": 100,
+      "related_entities": [{"type": "file", "raw": "lib/install.js", "slug": "lib-install-js", "resolved": false}, {"type": "file", "raw": "integrity.json", "slug": "integrity-json", "resolved": false}]
+    },
+    {
+      "type": "workflow_note",
+      "category": "工作流",
+      "title": "同版本插件不会自动换引擎，必须暂存新 release 再 activate",
+      "content": "Magpie connect() 只在插件版本变化时重新暂存。0.2.8-CL2XfX 已经是 JS 0.2.8，但引擎仍是 0.2.1，因此仅改源码或 Magpie 重连不会切到 0.2.2。正确做法是 stage 含新二进制的不可变副本，空闲时备份 bridge.db/plist/installation/Cursor settings，再 activate LaunchAgent。失败用 activate(previous.release) 回滚。旧发布目录必须保留。本机当前运行 0.2.8-NxbiVJ，回滚目标是 0.2.8-CL2XfX，备份在 ~/.config/magpie-cursor-bridge/backups/before-commit-fix-2026-10-21T06-00-29.814Z。",
+      "source_chunk": "**Assistant:** 旧 0.2.8-CL2XfX 使用 JS 0.2.8 但引擎仍是 0.2.1，所以必须暂存包含已发布 0.2.2 二进制的新 release。\nactivate() previous release (0.2.8-CL2XfX)",
+      "confidence_score": 100,
+      "related_entities": [
+        {"type": "file", "raw": "lib/install.js", "slug": "lib-install-js", "resolved": false},
+        {"type": "command", "raw": "activate", "slug": "activate", "resolved": false}
+      ]
+    },
+    {
+      "type": "insight",
+      "category": "技术",
+      "title": "本机 0.2.2 合成提交已走 Magpie 选中模型，不再出现 522",
+      "content": "2026-10-21 14:00 激活 0.2.8-NxbiVJ 后，status 为 connected，引擎 --version 为 0.2.2，healthz 204，代理 127.0.0.1:52407。node test/manual-commit.mjs --live 用合成 diff 经本地代理 POST WriteGitCommitMessage，约 6.6 秒返回 protobuf「chore: 将测试文本的 old value 替换为 new value」。bridge.db 新增 commit-message-e8867ba0-58a1-47cc-8ff8-b0cbf4defbf1：model_id=jiji-codex/gpt-6.1-sol，provider_url=http://127.0.0.1:3425/v1/responses，http_status=200，status=completed。model_configs sort_order=0 即该选中模型。未重启 Cursor，未改系统信任。Cursor 界面 Generate Commit Message 仍需用户点一次确认。Windows 引擎未包含此修复。",
+      "source_chunk": "**Assistant:** 合成请求已经拿到 protobuf 提交说明。\ncommit_message: chore: 将测试文本的 old value 替换为 new value\nmodel_id = jiji-codex/gpt-6.1-sol\nprovider_url = http://127.0.0.1:3425/v1/responses\nhttp_status = 200",
+      "confidence_score": 100,
+      "related_entities": [
+        {"type": "project", "raw": "magpie-agent-cursor-bridge", "slug": "magpie-agent-cursor-bridge", "resolved": false},
+        {"type": "command", "raw": "node test/manual-commit.mjs --live", "slug": "manual-commit-live", "resolved": false}
+      ]
+    },
+    {
+      "type": "learning",
+      "category": "工作流",
+      "title": "cursor-byok 源码用 GitHub tarball 固定 SHA，不要依赖 git clone",
+      "content": "本机 git clone cursor-byok 两次失败（HTTP/2 framing 与 LibreSSL SSL_ERROR_SYSCALL）。改用 https://codeload.github.com/leookun/cursor-byok/tar.gz/2068ab20513288e6a0289d33febe872a30608610 解压到 ~/be/cursor-byok-2068ab20513288e6a0289d33febe872a30608610，构建脚本支持 CURSOR_BRIDGE_SOURCE 指向该隔离目录，并设置独立 CURSOR_BYOK_DATA_DIR。git apply source.patch 必须在该源码根目录执行，在插件目录会因找不到 server/src/config.rs 失败。cargo test 若本机开了 HTTP 代理，需要 NO_PROXY=127.0.0.1,localhost,::1 否则关闭端口的传输错误会被代理改写成非 Error::Http。",
+      "source_chunk": "Git clone of cursor-byok failed twice (HTTP/2 framing, then LibreSSL SSL_ERROR_SYSCALL); recovered with codeload.github.com tarball SHA 2068ab2, unpacked under ~/be.",
+      "confidence_score": 95,
+      "related_entities": [
+        {"type": "file", "raw": "scripts/build-native.sh", "slug": "scripts-build-native-sh", "resolved": false},
+        {"type": "space", "raw": "~/be/cursor-byok-2068ab20513288e6a0289d33febe872a30608610", "slug": "cursor-byok-source", "resolved": false}
+      ]
+    },
+    {
+      "type": "cross_agent",
+      "category": "技术",
+      "title": "不要把提交修复理解成写死 commit_settings；Windows 仍未修",
+      "content": "早期分析建议首次导入后写入 commit_settings.model_id。已落地方案改为 LocalCatalogOnly 下每请求读目录首位，禁止外部回退。后续不要再把哈希写入数据库当作充分修复。macOS 本机已激活 0.2.2；Windows 仍使用 0.2.1 引擎，WriteGitCommitMessage 在 Windows 上仍可能走 tab.leokun.cn。不要重启 Cursor 来验证，除非用户明确要求；代理端口仍是 52407。回滚：activate 0.2.8-CL2XfX，并保留 backups/before-commit-fix-2026-10-21T06-00-29.814Z。",
+      "source_chunk": "**Assistant:** 后续最小修复方向：原生桥接首次导入模型和每次目录更新后，解析 connection.json 中选中的实际 model_id…\n**Correction:** 已改为每请求 catalogue first item，不持久化 model_hash。Windows binary remains unfixed.",
+      "confidence_score": 98,
+      "related_entities": [
+        {"type": "file", "raw": "source.patch", "slug": "source-patch", "resolved": false},
+        {"type": "reminder", "raw": "Windows 0.2.1 unfixed", "slug": "windows-unfixed", "resolved": false}
+      ],
+      "target_agents": ["future-cursor-bridge-agents"]
+    }
+  ],
+  "suggestions": []
+}

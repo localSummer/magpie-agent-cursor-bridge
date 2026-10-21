@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.2.8
+
+### Fixed
+
+- On macOS Apple Silicon, Generate Commit Message uses the model selected in Magpie. The bridge resolves the current local catalogue on every request, preserves custom commit prompts, and never falls back to Cursor or the public Tab service when generation fails.
+- Previously an unset commit model inherited upstream's public Tab service default, forwarding the original commit RPC to `tab.leokun.cn`, which returned HTTP 522. The bridge now handles this endpoint locally even when no commit preferences exist.
+- Native builds validate the candidate engine before replacing installed package artifacts and preserve platform-specific checksums. macOS engine versions can be pinned separately from the existing Windows build.
+
+### Scope
+
+- The macOS arm64 engine is updated to 0.2.2. The Windows x64 binary remains 0.2.1 and does **not** contain the commit-generation fix; source changes are shared, but Windows requires a separate native build and validation.
+- Commit generation follows Magpie's agent selection, not the model temporarily chosen in an individual Cursor chat. Requests contain repository diffs and are sent to the configured Magpie gateway and its selected provider only; normal Cursor traffic outside this endpoint retains its existing routing.
+
 ## 0.2.7
 
 A toggle restarted Cursor to make it re-read `http.proxy`, which cost every open
