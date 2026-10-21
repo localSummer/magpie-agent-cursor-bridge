@@ -1,0 +1,74 @@
+{
+  "session_id": "2026-10-21-14-10-00-upstream-history-divergence",
+  "timestamp": "2026-10-21T06:10:00Z",
+  "last_updated": "2026-10-21T06:16:00Z",
+  "extraction_count": 1,
+  "memories": [
+    {
+      "type": "decision",
+      "category": "workflow",
+      "title": "不要合并 932633145 的 31 个落后提交",
+      "content": "GitHub 显示本仓 main 领先 3 个、落后 31 个相对 932633145/magpie-agent-cursor-bridge:main。两边没有 merge-base：本地根是 b3553b3 feat: init，上游根是 495210c Release v0.2.0。本地已包含上游 0.2.7 的全部 JS 修复，并多出 0.2.8 的 macOS 提交生成修复。合并或 reset 到上游会丢掉 0.2.8，并把版本打回 0.2.7。后续只对上游未来新提交做 cherry-pick。",
+      "source_chunk": "**User:** This branch is 3 commits ahead of and 31 commits behind 932633145/magpie-agent-cursor-bridge:main.，分析下落后31个是否需要合并进来\n**Assistant:** 不要把 932633145/main 的 31 个提交合进来。本地已经包含上游 0.2.7 的全部 JS 修复，并多出 0.2.8 的 macOS 提交生成修复。",
+      "reasoning": "以后看到 GitHub 的 ahead/behind 不要直接合上游；这个数字来自 squashed 历史，不是功能缺口。",
+      "alternatives": [
+        {
+          "option": "git merge upstream/main",
+          "why_not": "无共同祖先，冲突多，会覆盖 0.2.8 修复"
+        },
+        {
+          "option": "git reset --hard upstream/main",
+          "why_not": "提交生成会再走 tab.leokun.cn，版本回到 0.2.7"
+        }
+      ],
+      "selected_option": "保持本地 0.2.8，只对上游未来新提交 cherry-pick",
+      "confidence_score": 95,
+      "related_entities": [
+        {"type": "project", "raw": "magpie-agent-cursor-bridge", "slug": "magpie-agent-cursor-bridge", "resolved": true},
+        {"type": "file", "raw": "package.json", "slug": "package-json", "resolved": true},
+        {"type": "file", "raw": "source.patch", "slug": "source-patch", "resolved": true},
+        {"type": "command", "raw": "git merge upstream/main", "slug": "git-merge-upstream-main", "resolved": false}
+      ],
+      "tools_mentioned": ["git"],
+      "urls_mentioned": [
+        "https://github.com/932633145/magpie-agent-cursor-bridge.git",
+        "https://github.com/localSummer/magpie-agent-cursor-bridge.git"
+      ],
+      "target_agents": []
+    },
+    {
+      "type": "insight",
+      "category": "technical",
+      "title": "本地 0.2.8 是上游 0.2.7 的压缩副本加提交生成修复",
+      "content": "agent.js、bridge.js 以及 lib/ 下除 native-build.js 外的 JS 与上游 0.2.7 相同。本地独有：lib/native-build.js、test/native-build.test.js、test/manual-commit.mjs、engine_version_darwin_arm64=0.2.2、source.patch 中的 WriteGitCommitMessage 本地拦截。上游独有：把 jsonc-parser 提交进 node_modules。Windows 引擎仍是 0.2.1，提交生成修复只在 macOS arm64。",
+      "source_chunk": "**Assistant:** 核心 JS 看起来已经对齐。agent.js bridge.js lib/*.js 与上游 0.2.7 相同。package.json 本地 0.2.8，上游 0.2.7。source.patch 本地多提交生成拦截。",
+      "reasoning": "核对功能时比文件树和提交哈希，不要被 GitHub 提交计数误导。",
+      "confidence_score": 92,
+      "related_entities": [
+        {"type": "file", "raw": "lib/native-build.js", "slug": "lib-native-build-js", "resolved": true},
+        {"type": "file", "raw": "integrity.json", "slug": "integrity-json", "resolved": true},
+        {"type": "file", "raw": "source.patch", "slug": "source-patch", "resolved": true}
+      ],
+      "tools_mentioned": ["git"],
+      "urls_mentioned": ["https://tab.leokun.cn"],
+      "target_agents": []
+    },
+    {
+      "type": "workflow_note",
+      "category": "workflow",
+      "title": "本仓 origin 已指向 localSummer 并强制覆盖过远端",
+      "content": "origin 是 https://github.com/localSummer/magpie-agent-cursor-bridge.git。已对 main 强制推送，远端从 92eb3e3 更新到 35d2faf。upstream 远程已添加为 https://github.com/932633145/magpie-agent-cursor-bridge.git，仅用于对照，不要推送到上游。",
+      "source_chunk": "**User:** 将仓库关联到 https://github.com/localSummer/magpie-agent-cursor-bridge.git 上，并强制推送并覆盖\n**Assistant:** 强制推送结果：92eb3e3...35d2faf main -> main (forced update)",
+      "reasoning": "后续 git push 默认打到 fork，不要误推 932633145。",
+      "confidence_score": 98,
+      "related_entities": [
+        {"type": "project", "raw": "localSummer/magpie-agent-cursor-bridge", "slug": "localsummer-magpie-agent-cursor-bridge", "resolved": true},
+        {"type": "command", "raw": "git push -u origin main --force", "slug": "git-push-origin-main-force", "resolved": false}
+      ],
+      "tools_mentioned": ["git"],
+      "urls_mentioned": ["https://github.com/localSummer/magpie-agent-cursor-bridge.git"],
+      "target_agents": []
+    }
+  ],
+  "suggestions": []
+}
