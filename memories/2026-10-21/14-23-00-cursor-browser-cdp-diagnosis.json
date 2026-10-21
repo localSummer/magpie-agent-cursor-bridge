@@ -1,0 +1,62 @@
+{
+  "session_id": "2026-10-21-14-23-00-cursor-browser-cdp-diagnosis",
+  "timestamp": "2026-10-21T06:23:00Z",
+  "last_updated": "2026-10-21T06:37:00Z",
+  "extraction_count": 1,
+  "memories": [
+    {
+      "type": "correction",
+      "category": "technical",
+      "title": "将空 noProxy 认定为全部 CDP 失效根因的旧结论被实测纠正",
+      "content": "用户反馈桥接接入后 Cursor Browser/CDP 全部不可用。此前会话摘要把 http.noProxy: [] 直接判为主要根因，证据不足。本次保持桥接 0.2.8、代理 127.0.0.1:52407 和原生进程 56687 运行，不修改设置、不重启 Cursor：列出标签页为空，新建 about:blank 视图 a9d037 后 Runtime.evaluate 成功；随后新建视图 7cba71，导航到临时本地页面并通过 Runtime.evaluate 读取地址、标题、正文均成功。测试视图和服务已关闭。只能证明当前这些路径可用，不能宣称已修复或排除此前特定页面/功能故障；尚未执行关闭桥接的对照实验。",
+      "source_chunk": "刚完成一个关键实测：保持 Magpie 桥接开启，我新建了 Cursor Browser View，并成功执行 `Runtime.evaluate`。因此当前 CDP 控制链路本身可用；此前把 `http.noProxy: []` 直接判定为“全部 CDP 失效的根因”证据不足。",
+      "confidence_score": 100,
+      "related_entities": [
+        {"type": "project", "raw": "magpie-agent-cursor-bridge", "slug": "magpie-agent-cursor-bridge", "resolved": true}
+      ],
+      "tools_mentioned": ["cursor-ide-browser-browser_tabs", "cursor-ide-browser-browser_navigate", "cursor-ide-browser-browser_cdp"]
+    },
+    {
+      "type": "insight",
+      "category": "technical",
+      "title": "No browser view available 在扩展启动注入时出现不代表 CDP 通道损坏",
+      "content": "Cursor 3.20.10 自带 cursor-browser-automation 扩展通过 vscode 的 cursor.browserView.executeJavaScript 等内部命令直接执行，控制路径不同于网页 HTTP 请求。2026-10-21 09:57 和 13:57 的 No browser view available 紧接扩展激活、injectBrowserUIScript 调用出现，表示当时没有可用视图；同一扩展在 11:04 有成功点击记录，14:30 创建新视图后 CDP 成功。因此启动时这条日志不能单独证明浏览器功能永久不可用，也不应直接映射为本地 WebSocket 被代理阻断。",
+      "source_chunk": "[2026-10-21T05:57:38.271Z] [INFO] [general] Browser Automation MCP Provider initialized with direct execution\n[2026-10-21T05:57:38.272Z] [INFO] [general] injectBrowserUIScript called\n[2026-10-21T05:57:38.373Z] [ERROR] [general] Failed to inject browser UI script:: No browser view available",
+      "confidence_score": 99,
+      "related_entities": [
+        {"type": "file", "raw": "/Applications/Cursor.app/Contents/Resources/app/extensions/cursor-browser-automation/dist/extension.js", "slug": null, "resolved": true}
+      ]
+    },
+    {
+      "type": "learning",
+      "category": "technical",
+      "title": "历史 CDP Invalid parameters 对应 Network.getRequestPostData 缺少 requestId",
+      "content": "20261021T110236/window1 的 Browser Automation 日志第 34–36 行显示，11:05:50 调用 Network.getRequestPostData 仅包含 viewId 和 method，没有 params.requestId，随后 Electron 的 vscode:webviewSendCDPCommand 返回 Invalid parameters。该方法需要请求标识，这是明确的调用参数错误，不是代理网络失败；之后仍有 Runtime.evaluate 调用记录。后续排查应保存确切方法和参数，区分视图不存在、元素引用过期、CDP 参数错误与网页网络错误。",
+      "source_chunk": "[2026-10-21T03:05:50.206Z] [INFO] [general] Executing tool: browser_cdp with args: {\"viewId\":\"1cf7ac\",\"method\":\"Network.getRequestPostData\"}\n[2026-10-21T03:05:50.210Z] [ERROR] [general] Error executing tool browser_cdp:: Error invoking remote method 'vscode:webviewSendCDPCommand': Error: Invalid parameters",
+      "confidence_score": 100,
+      "related_entities": []
+    },
+    {
+      "type": "correction",
+      "category": "technical",
+      "title": "原生代理能够转发非 Cursor 目标且本地 HTTP 经代理实测成功",
+      "content": "读取 ~/be/cursor-byok-2068ab20513288e6a0289d33febe872a30608610/server/src/local_app/proxy.rs 发现，CursorRelay 的 should_intercept_connect/should_intercept_tls 只匹配 Cursor 域名；handle_request 只对 Cursor 域名和指定路径改写后端，其他请求保留原目标。启动临时本地 HTTP 服务并用 curl --noproxy '' --proxy http://127.0.0.1:52407 强制经桥接访问，结果 HTTP 200、LOCAL_OK。因此“透明 relay 加原生引擎不支持本地 HTTP”属于错误推断。http.noProxy 被清空是独立配置副作用，宜保留用户规则并补充本地地址，但具体栈是否代理由其实现决定，不能宣称所有本地连接必经代理或添加绕过一定修好 Browser。Figma 的目标是远程 mcp.figma.com，其连接代理端口失败不证明本地 CDP 被代理。",
+      "source_chunk": "{\"targetPort\":59364,\"code\":0,\"stdout\":\"HTTP/1.1 200 OK\\r\\ncontent-type: text/plain\\r\\nDate: Wed, 21 Oct 2026 06:28:33 GMT\\r\\nConnection: keep-alive\\r\\nKeep-Alive: timeout=5\\r\\nTransfer-Encoding: chunked\\r\\n\\r\\nLOCAL_OK\",\"stderr\":\"\"}",
+      "confidence_score": 100,
+      "related_entities": [
+        {"type": "file", "raw": "lib/settings.js", "slug": null, "resolved": true},
+        {"type": "file", "raw": "server/src/local_app/proxy.rs", "slug": null, "resolved": true}
+      ]
+    },
+    {
+      "type": "confidence",
+      "category": "workflow",
+      "title": "本次仅完成分析和有限运行验证，未修改源码或实时代理设置",
+      "content": "node --test test/*.test.js 本次 84 项全部通过，但现有测试不覆盖完整 Browser/CDP 端到端行为，不能以此证明所有浏览器功能正常。本次仅新增会话记忆及工作区外的 HTML 分析页，没有修改桥接源代码、用户 settings.json、Cursor 扩展或运行版本，没有执行关闭桥接的对照实验。下一步应使用实际失败调用的完整参数和时间做复现，再在相同视图/页面条件下对比桥接开关状态，避免把相关性当因果。最终分析页位于 /Users/wangxingwen/.answer-me-with-html/pages/Cursor-Browser-CDP-排查结果-20261021-143604.html。",
+      "source_chunk": "1..84\n# tests 84\n# suites 0\n# pass 84\n# fail 0\n# cancelled 0\n# skipped 0\n# todo 0",
+      "confidence_score": 100,
+      "related_entities": []
+    }
+  ],
+  "suggestions": []
+}
