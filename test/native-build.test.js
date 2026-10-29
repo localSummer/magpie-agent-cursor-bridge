@@ -68,7 +68,7 @@ test('validated candidate updates only macOS digest, platform pin and package ve
     assert.deepEqual(args,['--version']);
     assert.deepEqual(snapshot(root),previous,'validation precedes both replacements');
     assert.equal(fs.readFileSync(file,'utf8'),'candidate macOS engine');
-    return {status:0,stdout:'0.2.2\n'};
+    return {status:0,stdout:darwinEngineVersion+'\n'};
   }});
   const digest=createHash('sha256').update(fs.readFileSync(candidate)).digest('hex');
   assert.deepEqual(JSON.parse(fs.readFileSync(path.join(root,'integrity.json'),'utf8')),
@@ -79,7 +79,7 @@ test('validated candidate updates only macOS digest, platform pin and package ve
   assert.deepEqual(fs.readdirSync(path.dirname(bin)).sort(),['cursor-magpie-bridge','cursor-magpie-bridge.exe']);
 });
 
-for(const result of [{status:0,stdout:'0.2.1'}, {status:0,stdout:'0.2.8'}, {status:1,stdout:'0.2.2'}, {status:0,stdout:''}]) {
+for(const result of [{status:0,stdout:'0.2.1'}, {status:0,stdout:'0.2.2'}, {status:0,stdout:'0.2.8'}, {status:1,stdout:darwinEngineVersion}, {status:0,stdout:''}]) {
   test(`candidate version ${JSON.stringify(result)} preserves existing artifacts`,t=>{
     const {root,candidate}=setup(t),previous=snapshot(root);
     assert.throws(()=>publishNative(root,candidate,{exec:()=>result}),/候选引擎版本不符/);
@@ -100,7 +100,7 @@ test('malformed integrity metadata is rejected before binary replacement',t=>{
   const {root,candidate}=setup(t);
   fs.writeFileSync(path.join(root,'integrity.json'),'{broken');
   const previous=snapshot(root);
-  assert.throws(()=>publishNative(root,candidate,{exec:()=>({status:0,stdout:'0.2.2'})}),SyntaxError);
+  assert.throws(()=>publishNative(root,candidate,{exec:()=>({status:0,stdout:darwinEngineVersion})}),SyntaxError);
   assert.deepEqual(snapshot(root),previous);
 });
 
@@ -110,7 +110,7 @@ test('manifest publication failure restores the previously shipped binary',t=>{
     if(to===path.join(root,'integrity.json')) throw new Error('manifest publication failed');
     return rename(from,to);
   });
-  assert.throws(()=>publishNative(root,candidate,{exec:()=>({status:0,stdout:'0.2.2'})}),/manifest publication failed/);
+  assert.throws(()=>publishNative(root,candidate,{exec:()=>({status:0,stdout:darwinEngineVersion})}),/manifest publication failed/);
   assert.deepEqual(snapshot(root),previous);
 });
 
@@ -118,14 +118,18 @@ test('the native build runs affected Rust tests before compiling and publishing'
   const script=fs.readFileSync(fileURLToPath(new URL('../scripts/build-native.sh',import.meta.url)),'utf8');
   const lib=script.indexOf('cargo test --manifest-path');
   const integration=script.indexOf('cargo test --manifest-path',lib+1);
-  const bridge=script.indexOf('cargo test --manifest-path',integration+1);
+  const lifecycle=script.indexOf('cargo test --manifest-path',integration+1);
+  const policy=script.indexOf('cargo test --manifest-path',lifecycle+1);
+  const bridge=script.indexOf('cargo test --manifest-path',policy+1);
   const build=script.indexOf('cargo build --manifest-path');
   const publish=script.indexOf('native-build.js" publish');
   const data=script.indexOf('export CURSOR_BYOK_DATA_DIR="$bridge_build/data"');
   assert.ok(data>=0 && data<lib);
-  assert.ok(lib>=0 && lib<integration && integration<bridge && bridge<build && build<publish);
-  assert.match(script.slice(lib,integration),/--lib commit_message/);
-  assert.match(script.slice(integration,bridge),/--test commit_message/);
+  assert.ok(lib>=0 && lib<integration && integration<lifecycle && lifecycle<policy && policy<bridge && bridge<build && build<publish);
+  assert.match(script.slice(lib,integration),/--lib/);
+  assert.match(script.slice(integration,lifecycle),/--test commit_message/);
+  assert.match(script.slice(lifecycle,policy),/--test error_lifecycle/);
+  assert.match(script.slice(policy,bridge),/--test bridge_policy/);
   assert.match(script.slice(bridge,build),/--bin cursor-magpie-bridge/);
   assert.match(script,/export CARGO_TARGET_DIR="\$bridge_build\/target"/);
   assert.match(script,/This build script supports macOS Apple Silicon only\./);

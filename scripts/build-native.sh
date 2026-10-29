@@ -13,8 +13,10 @@ node "$bridge_package/lib/native-build.js" prepare "$bridge_package" "$bridge_bu
 export CARGO_BUILD_JOBS="${CARGO_BUILD_JOBS:-2}"
 export CARGO_TARGET_DIR="$bridge_build/target"
 export CURSOR_BYOK_DATA_DIR="$bridge_build/data"
-cargo test --manifest-path "$bridge_build/source/Cargo.toml" --locked -p cursor-server --lib commit_message
+cargo test --manifest-path "$bridge_build/source/Cargo.toml" --locked -p cursor-server --lib
 cargo test --manifest-path "$bridge_build/source/Cargo.toml" --locked -p cursor-server --test commit_message
+cargo test --manifest-path "$bridge_build/source/Cargo.toml" --locked -p cursor-server --test error_lifecycle
+cargo test --manifest-path "$bridge_build/source/Cargo.toml" --locked -p cursor-server --test bridge_policy
 cargo test --manifest-path "$bridge_build/source/Cargo.toml" --locked -p cursor-server --bin cursor-magpie-bridge
 cargo build --manifest-path "$bridge_build/source/Cargo.toml" --release --locked -p cursor-server --bin cursor-magpie-bridge
 # Validation and digest generation use a private candidate. A failed version

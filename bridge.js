@@ -6,11 +6,12 @@ import {fileURLToPath} from 'node:url';
 import {spawn} from 'node:child_process';
 import {createInterface} from 'node:readline';
 import {atomic,applyProxy,restoreProxy,clearStaleProxy} from './lib/settings.js';
-import {validate,gatewayModels} from './lib/config.js';
+import {validate,gatewayModels,isTransientGatewayError} from './lib/config.js';
 import {claim,held,release} from './lib/lock.js';
 import {readWired, nextMagpieGate} from './lib/magpie.js';
 import {shouldRevive} from './lib/watch.js';
 import {listenFixed} from './lib/relay.js';
+import {recordLatency} from './lib/diagnostics.js';
 
 // Cursor caches the proxy address it read from settings.json, so an engine that
 // takes a fresh port on every restart leaves Cursor dialing a closed one until it
@@ -56,7 +57,9 @@ if(command==='status') {
   // Declared before the first call: ensureWatch() reads these, and a `let` that
   // is still in its temporal dead zone throws instead of reading undefined.
   let watchSpawnedAt=0;
-  let child=null,ready=null,ending=false,lastConfig='',nextRefresh=0,paused=false,lastModels=0,pausedRetries=0,magpieGate=null;
+  let child=null,ready=null,ending=false,lastConfig='',nextRefresh=0,paused=false,lastModels=0,pausedRetries=0,magpieGate=null,catalogueWarning=null,catalogueUpdated=null,catalogueAccepted=null;
+  const catalogueStatus=()=>({catalogueUpdated,catalogueAccepted,...(catalogueWarning?{catalogueStale:true,catalogueWarning}:{})});
+  const configCurrent=raw=>!ending && fs.existsSync(file('connection.json')) && fs.readFileSync(file('connection.json'),'utf8')===raw && !nextMagpieGate(magpieGate,readWired()).hold;
   // Windows has no service manager here: a hidden process that is killed does
   // not come back on its own, and Cursor is left dialing a closed port.
   ensureWatch();
@@ -110,7 +113,7 @@ if(command==='status') {
     ready=await new Promise((resolve,reject)=>{
       const timer=setTimeout(()=>reject(new Error('bridge startup timed out')),30000);
       const lines=createInterface({input:engine.stdout});
-      lines.on('line',line=>{try{const msg=JSON.parse(line);if(msg.event==='ready'){clearTimeout(timer);resolve(msg);}}catch{}});
+      lines.on('line',line=>{try{const msg=JSON.parse(line);recordLatency(file('latency.jsonl'),msg);if(msg.event==='ready' || msg.event==='catalogue') catalogueAccepted=new Date().toISOString();if(msg.event==='ready'){clearTimeout(timer);resolve(msg);}}catch{}});
       engine.once('error',()=>{clearTimeout(timer);reject(new Error('cannot start bridge engine'));});
       // Only a start that never reported ready is described here, and the exit
       // code alone does not prove the cause: 107 showed up on a machine whose CA
@@ -251,20 +254,32 @@ if(command==='status') {
         else {
           const changed=raw!==lastConfig;
           if(changed || Date.now()>=nextRefresh || !child || child.exitCode!==null || child.signalCode!==null) {
-            const effective=await gatewayModels(c);
+            let effective;
+            try { effective=await gatewayModels(c); }
+            catch(error) {
+              if(!configCurrent(raw)) continue;
+              if(changed || !child || !ready || child.exitCode!==null || child.signalCode!==null || !isTransientGatewayError(error)) throw error;
+              catalogueWarning=error.code||`gateway_http_${error.status}`;
+            }
+            if(!configCurrent(raw)) continue;
             // The gateway answers in tens of milliseconds, so a longer period
             // only delayed a model added in Magpie; Cursor re-reads the catalog
             // on its own schedule and needs the new entries to be there.
             nextRefresh=Date.now()+4000;
-            if(!child || child.exitCode!==null || child.signalCode!==null) {
-              await stop();await start(effective);
-            } else atomic(file('effective.json'),JSON.stringify(effective));
-            lastConfig=raw;paused=false;lastModels=effective.models.length;pausedRetries=0;
-            status('connected',{model:c.model,models:lastModels,proxy:publicProxy(),backend:ready.backend,pid:child.pid},{force:true});
+            if(effective) {
+              if(!child || child.exitCode!==null || child.signalCode!==null) {
+                await stop();
+                if(!configCurrent(raw)) continue;
+                await start(effective);
+              } else atomic(file('effective.json'),JSON.stringify(effective));
+              lastConfig=raw;paused=false;lastModels=effective.models.length;pausedRetries=0;
+              catalogueWarning=null;catalogueUpdated=new Date().toISOString();
+            }
+            status('connected',{model:c.model,models:lastModels,proxy:publicProxy(),backend:ready.backend,pid:child.pid,...catalogueStatus()},{force:true});
           } else {
             // The proxy is reapplied on every pass, so an unchanged state would
             // otherwise never be rewritten; readers rely on the heartbeat.
-            status('connected',{model:c.model,models:lastModels,proxy:publicProxy(),backend:ready.backend,pid:child.pid});
+            status('connected',{model:c.model,models:lastModels,proxy:publicProxy(),backend:ready.backend,pid:child.pid,...catalogueStatus()});
           }
           try {
             // Only a real change needs Cursor restarted: a rewrite of the same
